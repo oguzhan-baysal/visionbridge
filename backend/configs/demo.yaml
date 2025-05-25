@@ -1,0 +1,14 @@
+id: demo
+actions:
+  - type: remove
+    selector: ".ad-banner"
+  - type: replace
+    selector: "#old-header"
+    newElement: "<header id='new-header'>Yeni Header</header>"
+  - type: insert
+    position: "after"
+    target: "body"
+    element: "<footer class='footer'>Footer İçeriği (VisionBridge)</footer>"
+  - type: alter
+    oldValue: "Machine Learning"
+    newValue: "Yapay Zeka"
