@@ -1,0 +1,4 @@
+actions:
+    - selector: .user-89
+      type: remove
+id: user-89-config

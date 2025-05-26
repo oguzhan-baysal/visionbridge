@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VisionBridge Performance Test</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      margin: 0; 
+      padding: 20px; 
+      background: #f5f5f5; 
+    }
+    .test-container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    .metric {
+      background: #e3f2fd;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      border-left: 4px solid #2196f3;
+    }
+    .success { border-left-color: #4caf50; background: #e8f5e8; }
+    .warning { border-left-color: #ff9800; background: #fff3e0; }
+    .error { border-left-color: #f44336; background: #ffebee; }
+    .ad-banner { background: #ffd700; padding: 16px; text-align: center; margin: 10px 0; }
+    #old-header { background: #0074d9; color: #fff; padding: 24px; margin: 10px 0; }
+  </style>
+</head>
+<body>
+  <div class="test-container">
+    <h1>VisionBridge Performance Test</h1>
+    
+    <div class="ad-banner">Test Reklam Alanı (Kaldırılacak)</div>
+    <header id="old-header">Eski Header (Değiştirilecek)</header>
+    
+    <h2>Frontend Yükleme Süresi Testi</h2>
+    <div id="performance-results">
+      <div class="metric">Test başlatılıyor...</div>
+    </div>
+    
+    <h3>Test Edilen Metrikler:</h3>
+    <ul>
+      <li>VisionBridge kütüphanesi yükleme süresi</li>
+      <li>DOM manipülasyon süresi</li>
+      <li>Toplam işlem süresi</li>
+      <li>Memory kullanımı (yaklaşık)</li>
+    </ul>
+    
+    <div id="test-content">
+      <p>Machine Learning teknolojileri burada test edilir.</p>
+      <p>Bu metin "Machine Learning" ifadesini "Yapay Zeka" olarak değiştirecek.</p>
+    </div>
+  </div>
+
+  <script>
+    // Performance ölçümü başlat
+    const performanceStart = performance.now();
+    let scriptLoadTime = 0;
+    let domManipulationTime = 0;
+    
+    // Memory kullanımı (yaklaşık)
+    const initialMemory = performance.memory ? performance.memory.usedJSHeapSize : 0;
+    
+    // Script yükleme süresini ölçmek için
+    const scriptStartTime = performance.now();
+    
+    // VisionBridge yüklenmeden önce DOM'u gözlemle
+    const observer = new MutationObserver((mutations) => {
+      if (!domManipulationTime) {
+        domManipulationTime = performance.now();
+      }
+    });
+    
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true
+    });
+    
+    // Sonuçları göster
+    function showResults() {
+      const totalTime = performance.now() - performanceStart;
+      const finalMemory = performance.memory ? performance.memory.usedJSHeapSize : 0;
+      const memoryUsed = finalMemory - initialMemory;
+      
+      const resultsDiv = document.getElementById('performance-results');
+      
+      let html = '';
+      
+      // Script yükleme süresi
+      const loadTimeClass = scriptLoadTime < 50 ? 'success' : scriptLoadTime < 100 ? 'warning' : 'error';
+      html += `<div class="metric ${loadTimeClass}">
+        <strong>Script Yükleme Süresi:</strong> ${scriptLoadTime.toFixed(2)}ms 
+        ${scriptLoadTime < 100 ? '✅ Hedef: <100ms' : '❌ Hedef: <100ms'}
+      </div>`;
+      
+      // DOM manipülasyon süresi
+      const domTime = domManipulationTime - scriptStartTime;
+      const domTimeClass = domTime < 50 ? 'success' : domTime < 100 ? 'warning' : 'error';
+      html += `<div class="metric ${domTimeClass}">
+        <strong>DOM Manipülasyon Süresi:</strong> ${domTime.toFixed(2)}ms 
+        ${domTime < 50 ? '✅ Hedef: <50ms' : '❌ Hedef: <50ms'}
+      </div>`;
+      
+      // Toplam süre
+      const totalTimeClass = totalTime < 100 ? 'success' : totalTime < 200 ? 'warning' : 'error';
+      html += `<div class="metric ${totalTimeClass}">
+        <strong>Toplam İşlem Süresi:</strong> ${totalTime.toFixed(2)}ms 
+        ${totalTime < 100 ? '✅ Hedef: <100ms' : '❌ Hedef: <100ms'}
+      </div>`;
+      
+      // Memory kullanımı
+      if (performance.memory) {
+        const memoryMB = (memoryUsed / 1024 / 1024).toFixed(2);
+        const memoryClass = memoryUsed < 1024*1024 ? 'success' : 'warning'; // 1MB altı
+        html += `<div class="metric ${memoryClass}">
+          <strong>Memory Kullanımı:</strong> ${memoryMB}MB 
+          ${memoryUsed < 1024*1024 ? '✅ Minimal' : '⚠️ Orta'}
+        </div>`;
+      }
+      
+      // VisionBridge Analytics varsa göster
+      if (window.VisionBridgeAnalytics) {
+        html += `<div class="metric success">
+          <strong>Uygulanan Aksiyonlar:</strong> ${Object.values(window.VisionBridgeAnalytics.counts).reduce((a,b) => a+b, 0)}
+        </div>`;
+      }
+      
+      resultsDiv.innerHTML = html;
+      
+      // Observer'ı durdur
+      observer.disconnect();
+      
+      console.log('Performance Test Sonuçları:', {
+        scriptLoadTime: scriptLoadTime + 'ms',
+        domManipulationTime: domTime + 'ms',
+        totalTime: totalTime + 'ms',
+        memoryUsed: memoryUsed + ' bytes'
+      });
+    }
+    
+    // VisionBridge yüklendikten sonra sonuçları göster
+    setTimeout(() => {
+      scriptLoadTime = performance.now() - scriptStartTime;
+      setTimeout(showResults, 100); // DOM manipülasyonlarının tamamlanması için bekle
+    }, 10);
+  </script>
+  
+  <!-- VisionBridge kütüphanesini yükle -->
+  <script src="visionbridge.js"></script>
+</body>
+</html> 

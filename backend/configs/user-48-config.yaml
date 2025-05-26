@@ -1,0 +1,4 @@
+actions:
+    - selector: .user-48
+      type: remove
+id: user-48-config

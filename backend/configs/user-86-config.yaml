@@ -1,0 +1,4 @@
+actions:
+    - selector: .user-86
+      type: remove
+id: user-86-config
