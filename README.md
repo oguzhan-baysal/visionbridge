@@ -907,9 +907,9 @@ Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICE
 
 ## 📞 İletişim
 
-- **Proje Sahibi:** [Your Name](mailto:your.email@example.com)
-- **GitHub:** [https://github.com/your-username/visionbridge](https://github.com/your-username/visionbridge)
-- **Issues:** [GitHub Issues](https://github.com/your-username/visionbridge/issues)
+- **Proje Sahibi:** [Oğuzhan Baysal](mailto:oguzhanbaysal@outlook.com)
+- **GitHub:** [https://github.com/oguzhan-baysal](https://github.com/oguzhan-baysal/visionbridge)
+- **Issues:** [GitHub Issues](https://github.com/oguzhan-baysal/visionbridge/issues)
 
 ---
 
@@ -917,6 +917,6 @@ Bu proje MIT lisansı altında lisanslanmıştır. Detaylar için [LICENSE](LICE
 
 **VisionBridge ile web sitenizi dinamik hale getirin! 🚀**
 
-[⭐ Star](https://github.com/your-username/visionbridge) | [🐛 Report Bug](https://github.com/your-username/visionbridge/issues) | [💡 Request Feature](https://github.com/your-username/visionbridge/issues)
+[⭐ Star](https://github.com/oguzhan-baysal/visionbridge) | [🐛 Report Bug](https://github.com/oguzhan-baysal/visionbridge/issues) | [💡 Request Feature](https://github.com/oguzhan-baysal/visionbridge/issues)
 
 </div> 
