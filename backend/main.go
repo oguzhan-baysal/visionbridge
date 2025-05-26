@@ -18,6 +18,21 @@ import (
 // Config yapısı (örnek, dinamik alanlar için map[string]interface{})
 type Config map[string]interface{}
 
+// Pages bazlı konfigürasyon yapısı
+type PagesConfig struct {
+	ID         string                 `yaml:"id" json:"id"`
+	Name       string                 `yaml:"name" json:"name"`
+	Datasource PagesDataSource        `yaml:"datasource" json:"datasource"`
+	Actions    []interface{}          `yaml:"actions" json:"actions"`
+	Metadata   map[string]interface{} `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+}
+
+type PagesDataSource struct {
+	Pages map[string]interface{} `yaml:"pages,omitempty" json:"pages,omitempty"`
+	URLs  map[string]interface{} `yaml:"urls,omitempty" json:"urls,omitempty"`
+	Hosts map[string]interface{} `yaml:"hosts,omitempty" json:"hosts,omitempty"`
+}
+
 // Yardımcı: configs klasörü yolu
 const configDir = "configs"
 
@@ -29,6 +44,62 @@ func configPath(id string) string {
 // Yardımcı: spesifik config dosya yolu
 func specificConfigPath(id string) string {
 	return filepath.Join(configDir, "specific_"+id+".yaml")
+}
+
+// Yardımcı: pages config dosya yolu
+func pagesConfigPath(id string) string {
+	return filepath.Join(configDir, "pages_"+id+".yaml")
+}
+
+// Pages konfigürasyonunu yükle
+func loadPagesConfig(id string) (*PagesConfig, error) {
+	b, err := ioutil.ReadFile(pagesConfigPath(id))
+	if err != nil {
+		return nil, err
+	}
+	var cfg PagesConfig
+	if err := yaml.Unmarshal(b, &cfg); err != nil {
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+// Pages konfigürasyonunu kaydet
+func savePagesConfig(cfg *PagesConfig) error {
+	// Actions validasyonu
+	if cfg.Actions != nil {
+		valid, sanitized := validateAndSanitizeActions(cfg.Actions)
+		if !valid {
+			return fmt.Errorf("geçersiz actions")
+		}
+		cfg.Actions = sanitized
+	}
+	
+	b, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(pagesConfigPath(cfg.ID), b, 0644)
+}
+
+// Tüm pages konfigürasyonlarını listele
+func getAllPagesConfigs() ([]PagesConfig, error) {
+	files, err := ioutil.ReadDir(configDir)
+	if err != nil {
+		return nil, err
+	}
+	
+	var configs []PagesConfig
+	for _, file := range files {
+		if filepath.Ext(file.Name()) == ".yaml" && 
+		   len(file.Name()) > 6 && file.Name()[:6] == "pages_" {
+			id := file.Name()[6 : len(file.Name())-5] // "pages_" ve ".yaml" kaldır
+			if cfg, err := loadPagesConfig(id); err == nil {
+				configs = append(configs, *cfg)
+			}
+		}
+	}
+	return configs, nil
 }
 
 // Basit HTML sanitizer: <script>, <style> ve on* eventlerini kaldırır
@@ -387,6 +458,165 @@ func handleDeleteSpecific(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"message": "Spesifik config silindi"}`))
 }
 
+// Pages Configuration Endpoints
+
+// GET /api/pages/all
+func handleGetAllPagesConfigs(w http.ResponseWriter, r *http.Request) {
+	configs, err := getAllPagesConfigs()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "Pages config klasörü okunamadı"}`))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(configs)
+}
+
+// GET /api/pages/{id}
+func handleGetPagesConfig(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+	cfg, err := loadPagesConfig(id)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"error": "Pages config bulunamadı"}`))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(cfg)
+}
+
+// POST /api/pages
+func handlePostPagesConfig(w http.ResponseWriter, r *http.Request) {
+	var cfg PagesConfig
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error": "JSON parse hatası"}`))
+		return
+	}
+	
+	if cfg.ID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error": "id alanı zorunlu"}`))
+		return
+	}
+	
+	if err := savePagesConfig(&cfg); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(fmt.Sprintf(`{"error": "%s"}`, err.Error())))
+		return
+	}
+	
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte(`{"message": "Pages config eklendi"}`))
+}
+
+// PUT /api/pages/{id}
+func handlePutPagesConfig(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+	
+	var cfg PagesConfig
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error": "JSON parse hatası"}`))
+		return
+	}
+	
+	cfg.ID = id // URL'den gelen ID'yi kullan
+	
+	if err := savePagesConfig(&cfg); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(fmt.Sprintf(`{"error": "%s"}`, err.Error())))
+		return
+	}
+	
+	w.Write([]byte(`{"message": "Pages config güncellendi"}`))
+}
+
+// DELETE /api/pages/{id}
+func handleDeletePagesConfig(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+	if err := os.Remove(pagesConfigPath(id)); err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"error": "Pages config silinemedi"}`))
+		return
+	}
+	w.Write([]byte(`{"message": "Pages config silindi"}`))
+}
+
+// GET /api/pages/resolve - Query parametrelerine göre uygun pages config'i döndür
+func handleResolvePagesConfig(w http.ResponseWriter, r *http.Request) {
+	host := r.URL.Query().Get("host")
+	url := r.URL.Query().Get("url")
+	page := r.URL.Query().Get("page")
+	
+	if host == "" && url == "" && page == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error": "host, url veya page parametresi gerekli"}`))
+		return
+	}
+	
+	configs, err := getAllPagesConfigs()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error": "Pages config okunamadı"}`))
+		return
+	}
+	
+	// Öncelik sırası: page > url > host
+	for _, cfg := range configs {
+		// Page bazlı eşleşme
+		if page != "" && cfg.Datasource.Pages != nil {
+			if configRef, exists := cfg.Datasource.Pages[page]; exists {
+				result := map[string]interface{}{
+					"config": cfg,
+					"matched_by": "page",
+					"matched_value": page,
+					"config_ref": configRef,
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(result)
+				return
+			}
+		}
+		
+		// URL bazlı eşleşme
+		if url != "" && cfg.Datasource.URLs != nil {
+			if configRef, exists := cfg.Datasource.URLs[url]; exists {
+				result := map[string]interface{}{
+					"config": cfg,
+					"matched_by": "url",
+					"matched_value": url,
+					"config_ref": configRef,
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(result)
+				return
+			}
+		}
+		
+		// Host bazlı eşleşme
+		if host != "" && cfg.Datasource.Hosts != nil {
+			if configRef, exists := cfg.Datasource.Hosts[host]; exists {
+				result := map[string]interface{}{
+					"config": cfg,
+					"matched_by": "host",
+					"matched_value": host,
+					"config_ref": configRef,
+				}
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(result)
+				return
+			}
+		}
+	}
+	
+	w.WriteHeader(http.StatusNotFound)
+	w.Write([]byte(`{"error": "Eşleşen pages config bulunamadı"}`))
+}
+
 // Log middleware
 func logMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -428,6 +658,14 @@ func main() {
 	router.HandleFunc("/api/specific", handlePostSpecific).Methods("POST")
 	router.HandleFunc("/api/specific/{id}", handlePutSpecific).Methods("PUT")
 	router.HandleFunc("/api/specific/{id}", handleDeleteSpecific).Methods("DELETE")
+
+	// Pages Configuration Routes
+	router.HandleFunc("/api/pages/all", handleGetAllPagesConfigs).Methods("GET")
+	router.HandleFunc("/api/pages/resolve", handleResolvePagesConfig).Methods("GET")
+	router.HandleFunc("/api/pages/{id}", handleGetPagesConfig).Methods("GET")
+	router.HandleFunc("/api/pages", handlePostPagesConfig).Methods("POST")
+	router.HandleFunc("/api/pages/{id}", handlePutPagesConfig).Methods("PUT")
+	router.HandleFunc("/api/pages/{id}", handleDeletePagesConfig).Methods("DELETE")
 
 	// CORS ayarları
 	c := cors.New(cors.Options{

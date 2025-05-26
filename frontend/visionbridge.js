@@ -78,25 +78,75 @@
     return Array.from(map.values());
   }
 
-  // Uygun konfigürasyonu seç (host > url > ilk)
+  // Uygun konfigürasyonu seç (pages > host > url > ilk)
   function selectConfig(configs) {
     const host = window.location.hostname;
     const path = window.location.pathname;
-    // 1. datasource varsa, host/url eşleşmesi ara
+    
+    // 1. Pages bazlı konfigürasyon kontrolü
     for (const config of configs) {
-      if (config.datasource) {
-        // Host bazlı
-        if (config.datasource.hosts && config.datasource.hosts[host]) {
-          return config;
-        }
-        // URL bazlı
-        if (config.datasource.urls && config.datasource.urls[path]) {
+      if (config.datasource && config.datasource.pages) {
+        // Sayfa tipini belirle (basit heuristic)
+        const pageType = detectPageType(path);
+        if (pageType && config.datasource.pages[pageType]) {
+          console.log(`VisionBridge: Pages config seçildi - ${pageType}`);
           return config;
         }
       }
     }
-    // 2. datasource yoksa veya eşleşme yoksa ilk konfig
+    
+    // 2. Host bazlı eşleşme
+    for (const config of configs) {
+      if (config.datasource && config.datasource.hosts && config.datasource.hosts[host]) {
+        console.log(`VisionBridge: Host config seçildi - ${host}`);
+        return config;
+      }
+    }
+    
+    // 3. URL bazlı eşleşme
+    for (const config of configs) {
+      if (config.datasource && config.datasource.urls) {
+        // Tam eşleşme
+        if (config.datasource.urls[path]) {
+          console.log(`VisionBridge: URL config seçildi - ${path}`);
+          return config;
+        }
+        // Partial eşleşme (path başlangıcı)
+        for (const urlPattern in config.datasource.urls) {
+          if (path.startsWith(urlPattern)) {
+            console.log(`VisionBridge: URL pattern config seçildi - ${urlPattern}`);
+            return config;
+          }
+        }
+      }
+    }
+    
+    // 4. Varsayılan: ilk konfigürasyon
+    console.log("VisionBridge: Varsayılan config seçildi");
     return configs[0];
+  }
+
+  // Sayfa tipini belirle (basit heuristic)
+  function detectPageType(path) {
+    // E-commerce patterns
+    if (path.includes('/product/') || path.includes('/item/')) return 'details';
+    if (path.includes('/products') || path.includes('/shop') || path.includes('/catalog')) return 'list';
+    if (path.includes('/cart') || path.includes('/basket')) return 'cart';
+    if (path.includes('/checkout') || path.includes('/payment')) return 'checkout';
+    
+    // Blog patterns
+    if (path.includes('/post/') || path.includes('/article/')) return 'post';
+    if (path.includes('/category/') || path.includes('/tag/')) return 'category';
+    if (path.includes('/archive')) return 'archive';
+    
+    // General patterns
+    if (path === '/' || path === '/home') return 'home';
+    if (path.includes('/about')) return 'about';
+    if (path.includes('/contact')) return 'contact';
+    if (path.includes('/search')) return 'search';
+    if (path.includes('/profile') || path.includes('/account')) return 'profile';
+    
+    return null;
   }
 
   // Koşullu aksiyon kontrolü (user context/dynamic values dahil)
@@ -172,7 +222,32 @@
   function updateDashboard() {
     const el = document.getElementById('vb-analytics-content');
     if (!el) return;
-    let html = '<b>Aksiyon Sayaçları</b><ul style="margin:8px 0 12px 0;padding-left:18px;">';
+    
+    let html = '';
+    
+    // Fetch durumu
+    if (analytics.lastFetch) {
+      const fetch = analytics.lastFetch;
+      const statusColor = fetch.success ? '#22c55e' : '#ef4444';
+      const statusText = fetch.success ? 'Başarılı' : 'Başarısız';
+      const source = fetch.fromCache ? ' (Cache)' : '';
+      
+      html += `<b>API Durumu</b><div style="margin:8px 0 12px 0;padding:8px;background:#27272a;border-radius:6px;">`;
+      html += `<div style="color:${statusColor};">● ${statusText}${source}</div>`;
+      if (fetch.attempt) html += `<div style="font-size:12px;color:#a1a1aa;">Deneme: ${fetch.attempt}</div>`;
+      if (fetch.configCount) html += `<div style="font-size:12px;color:#a1a1aa;">Konfigürasyon: ${fetch.configCount}</div>`;
+      if (fetch.selectedConfig) {
+        html += `<div style="font-size:12px;color:#a3e635;">Seçilen: ${fetch.selectedConfig}</div>`;
+      }
+      if (fetch.pageType) {
+        html += `<div style="font-size:12px;color:#60a5fa;">Sayfa Tipi: ${fetch.pageType}</div>`;
+      }
+      if (fetch.error) html += `<div style="font-size:12px;color:#fca5a5;">${fetch.error}</div>`;
+      html += `<div style="font-size:12px;color:#a1a1aa;">${new Date(fetch.timestamp).toLocaleString()}</div>`;
+      html += '</div>';
+    }
+    
+    html += '<b>Aksiyon Sayaçları</b><ul style="margin:8px 0 12px 0;padding-left:18px;">';
     for (const type in analytics.counts) {
       html += `<li><b>${type}</b>: ${analytics.counts[type]}</li>`;
     }
@@ -216,15 +291,163 @@
     updateDashboard();
   }
 
-  // API'den konfigürasyonları çek
-  fetch(API_URL)
-    .then((res) => res.json())
-    .then((configs) => {
-      if (!Array.isArray(configs) || configs.length === 0) return;
-      const config = selectConfig(configs);
+  // Retry mechanism ile API çağrısı
+  async function fetchConfigWithRetry(url, maxRetries = 3, delay = 1000) {
+    let lastError;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`VisionBridge: API çağrısı deneme ${attempt}/${maxRetries}`);
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          // Timeout ekle (10 saniye)
+          signal: AbortSignal.timeout ? AbortSignal.timeout(10000) : undefined
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const configs = await response.json();
+        
+        if (!Array.isArray(configs) || configs.length === 0) {
+          console.warn("VisionBridge: Boş konfigürasyon listesi alındı");
+          return;
+        }
+        
+        console.log(`VisionBridge: ${configs.length} konfigürasyon başarıyla alındı`);
+        const config = selectConfig(configs);
+        
+        // Sayfa tipi ve seçilen config bilgisini al
+        const pageType = detectPageType(window.location.pathname);
+        const configName = config.name || config.id || 'Bilinmeyen';
+        
+        applyConfig(config);
+        
+        // Analytics'e başarılı fetch bilgisi ekle
+        analytics.lastFetch = {
+          success: true,
+          attempt: attempt,
+          timestamp: new Date().toISOString(),
+          configCount: configs.length,
+          selectedConfig: configName,
+          pageType: pageType
+        };
+        
+        return; // Başarılı, döngüden çık
+        
+      } catch (error) {
+        lastError = error;
+        console.warn(`VisionBridge: Deneme ${attempt} başarısız:`, error.message);
+        
+        // Analytics'e hata bilgisi ekle
+        analytics.lastFetch = {
+          success: false,
+          attempt: attempt,
+          error: error.message,
+          timestamp: new Date().toISOString()
+        };
+        
+        // Son deneme değilse bekle
+        if (attempt < maxRetries) {
+          const waitTime = delay * Math.pow(2, attempt - 1); // Exponential backoff
+          console.log(`VisionBridge: ${waitTime}ms bekleyip tekrar denenecek...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+      }
+    }
+    
+    // Tüm denemeler başarısız
+    console.error(`VisionBridge: ${maxRetries} deneme sonrası başarısız:`, lastError);
+    
+    // Fallback: localStorage'dan cached config kullan
+    try {
+      const cachedConfig = localStorage.getItem('visionbridge-cache');
+      if (cachedConfig) {
+        console.log("VisionBridge: Cached konfigürasyon kullanılıyor");
+        const configs = JSON.parse(cachedConfig);
+        const config = selectConfig(configs);
+        applyConfig(config);
+        
+        analytics.lastFetch = {
+          success: true,
+          fromCache: true,
+          timestamp: new Date().toISOString()
+        };
+      }
+    } catch (cacheError) {
+      console.warn("VisionBridge: Cache'den okuma başarısız:", cacheError);
+    }
+    
+    // Custom event dispatch et
+    window.dispatchEvent(new CustomEvent('visionbridge:fetch-failed', {
+      detail: { error: lastError, attempts: maxRetries }
+    }));
+  }
+
+  // Konfigürasyonları cache'le
+  function cacheConfig(configs) {
+    try {
+      localStorage.setItem('visionbridge-cache', JSON.stringify(configs));
+      localStorage.setItem('visionbridge-cache-time', Date.now().toString());
+    } catch (error) {
+      console.warn("VisionBridge: Cache yazma başarısız:", error);
+    }
+  }
+
+  // Cache'i kontrol et (1 saat geçerliliği)
+  function getCachedConfig() {
+    try {
+      const cacheTime = localStorage.getItem('visionbridge-cache-time');
+      const oneHour = 60 * 60 * 1000;
+      
+      if (cacheTime && (Date.now() - parseInt(cacheTime)) < oneHour) {
+        const cached = localStorage.getItem('visionbridge-cache');
+        if (cached) {
+          return JSON.parse(cached);
+        }
+      }
+    } catch (error) {
+      console.warn("VisionBridge: Cache okuma başarısız:", error);
+    }
+    return null;
+  }
+
+  // Ana fetch fonksiyonu
+  async function initVisionBridge() {
+    // Önce cache'i kontrol et
+    const cachedConfigs = getCachedConfig();
+    if (cachedConfigs) {
+      console.log("VisionBridge: Cache'den konfigürasyon kullanılıyor");
+      const config = selectConfig(cachedConfigs);
       applyConfig(config);
-    })
-    .catch((err) => {
-      console.error("VisionBridge config fetch error:", err);
-    });
+      
+      analytics.lastFetch = {
+        success: true,
+        fromCache: true,
+        timestamp: new Date().toISOString()
+      };
+    }
+    
+    // Her durumda fresh data almaya çalış
+    try {
+      await fetchConfigWithRetry(API_URL);
+      
+      // Başarılı fetch sonrası cache'i güncelle
+      const response = await fetch(API_URL);
+      if (response.ok) {
+        const configs = await response.json();
+        cacheConfig(configs);
+      }
+    } catch (error) {
+      // Hata durumunda cache kullanıldı, ek bir şey yapmaya gerek yok
+    }
+  }
+
+  // VisionBridge'i başlat
+  initVisionBridge();
 })(); 

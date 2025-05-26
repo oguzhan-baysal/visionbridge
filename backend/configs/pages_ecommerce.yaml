@@ -1,0 +1,33 @@
+id: ecommerce
+name: E-Commerce Site Configuration
+datasource:
+  pages:
+    list: ecommerce_list.yaml
+    details: ecommerce_details.yaml
+    cart: [ecommerce_cart.yaml, ecommerce_checkout.yaml]
+  urls:
+    /products: ecommerce_list.yaml
+    /product/: ecommerce_details.yaml
+    /cart: ecommerce_cart.yaml
+    /checkout: ecommerce_checkout.yaml
+  hosts:
+    shop.example.com: ecommerce_main.yaml
+    m.shop.example.com: ecommerce_mobile.yaml
+actions:
+  - type: remove
+    selector: ".advertisement"
+    priority: 10
+  - type: replace
+    selector: "#old-banner"
+    newElement: "<div id='new-banner' class='modern-banner'>Yeni Kampanya!</div>"
+    priority: 5
+  - type: insert
+    position: "after"
+    target: ".product-list"
+    element: "<div class='recommendation'>Önerilen Ürünler</div>"
+    priority: 3
+metadata:
+  created_at: "2024-01-15T10:00:00Z"
+  updated_at: "2024-01-15T10:00:00Z"
+  version: "1.0"
+  description: "E-commerce sitesi için genel konfigürasyon" 

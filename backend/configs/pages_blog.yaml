@@ -1,0 +1,44 @@
+id: blog
+name: Blog Site Configuration
+datasource:
+  pages:
+    home: blog_home.yaml
+    post: blog_post.yaml
+    category: blog_category.yaml
+    archive: blog_archive.yaml
+  urls:
+    /: blog_home.yaml
+    /post/: blog_post.yaml
+    /category/: blog_category.yaml
+    /archive: blog_archive.yaml
+    /about: blog_about.yaml
+  hosts:
+    blog.example.com: blog_main.yaml
+    dev.blog.example.com: blog_dev.yaml
+actions:
+  - type: remove
+    selector: ".sidebar-ads"
+    priority: 10
+    condition:
+      url: "/post/"
+  - type: alter
+    oldValue: "Machine Learning"
+    newValue: "AI & ML"
+    priority: 8
+  - type: insert
+    position: "prepend"
+    target: ".post-content"
+    element: "<div class='reading-time'>Okuma süresi: 5 dk</div>"
+    priority: 5
+    condition:
+      url: "/post/"
+  - type: replace
+    selector: ".old-footer"
+    newElement: "<footer class='modern-footer'>© 2024 Blog</footer>"
+    priority: 3
+metadata:
+  created_at: "2024-01-15T11:00:00Z"
+  updated_at: "2024-01-15T11:00:00Z"
+  version: "1.1"
+  description: "Blog sitesi için sayfa bazlı konfigürasyon"
+  tags: ["blog", "content", "reading"] 
